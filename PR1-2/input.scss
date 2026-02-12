@@ -1,0 +1,64 @@
+$primary_c: #2c3e50;
+$secondary_c: #b2ad9f;
+$r1_c: #3493db;
+$r2_c: red;
+$bg_c: whitesmoke;
+$font: "Geneva",sans-serif;
+
+@mixin flex-center{
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
+.page{
+    background-color: $bg_c;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+}
+
+.card{
+    background: $secondary_c;
+    border-radius: 8px;
+    max-width: 350px;
+    padding: 10px 14px;
+
+    &__title {
+        font-size: 18px;
+        font-family: $font;
+        color: $primary_c;
+    }
+
+    &__description {
+        font-size: 16px;
+        font-family: $font;
+        color: $r1_c;
+    }
+
+    &__image {
+        width: 100%;
+        height: 200px;
+        object-fit: cover;
+        display: block;
+    }
+
+    &__content{
+        @include flex-center;
+        padding: 20px;
+        text-align: center;
+    }
+
+    &__price{
+        font-family: $font;
+        font-size: 22px;
+        color: $r2_c;
+    }
+}
+
+.goods{
+    justify-content: center;
+    display: grid;
+    gap: 20px;
+}
