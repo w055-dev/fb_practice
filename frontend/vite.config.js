@@ -3,6 +3,7 @@ import react from '@vitejs/plugin-react'
 
 export default defineConfig({
   plugins: [react()],
+  base: '/fb_practice/',
   server: {
     port: 3001,
     open: true,
