@@ -10,9 +10,12 @@ const port = 3000;
 
 let users = [];
 let products = [];
+let refreshTokens = [];
 
 const JWT_SECRET = "access_secret";
-const ACCESS_EXPIRES_IN = "15m";
+const REFRESH_SECRET= "refresh_secret";
+const ACCESS_EXPIRES_IN = "5m";
+const REFRESH_EXPIRES_IN = "5m";
 
 function findUserByEmailOr404(email, res) {
   const user = users.find(u => u.email === email);
@@ -48,6 +51,31 @@ async function hashPassword(password) {
 
 async function verifyPassword(password, passwordHash) {
   return bcrypt.compare(password, passwordHash);
+}
+
+function generateTokens(user){
+  const accessToken=jwt.sign(
+    {
+      id: user.id,
+      email: user.email,
+      first_name: user.first_name,
+      last_name: user.last_name
+    },
+    JWT_SECRET,
+    {expiresIn: ACCESS_EXPIRES_IN}
+  );
+  const refreshToken=jwt.sign(
+    {
+      id: user.id
+    },
+    REFRESH_SECRET,
+    {expiresIn: REFRESH_EXPIRES_IN}
+  );
+  refreshTokens.push({
+    token: refreshToken,
+    userId: user.id,
+  });
+  return {accessToken, refreshToken};
 }
 
 function authenticateToken(req, res, next) {
@@ -231,6 +259,9 @@ app.post('/api/auth/register', async (req, res) => {
  *                 accessToken:
  *                   type: string
  *                   example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+ *                 refreshToken:
+ *                   type: string
+ *                   example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
  *       400:
  *         description: Отсутствуют обязательные поля
  *       401:
@@ -251,21 +282,84 @@ app.post('/api/auth/login', async (req, res) => {
   const isPasswordValid = await verifyPassword(password, user.password);
   
   if (isPasswordValid) {
-    const accessToken = jwt.sign(
-      { 
-        id: user.id, 
-        email: user.email,
-        first_name: user.first_name,
-        last_name: user.last_name 
-      }, 
-      JWT_SECRET, 
-      { expiresIn: ACCESS_EXPIRES_IN }
-    );
-    
-    res.status(200).json({ accessToken });
+    const tokens = generateTokens(user);
+    res.status(200).json({ tokens });
   } else {
     res.status(401).json({ error: "Неверный пароль" });
   }
+});
+
+/**
+ * @swagger
+ * /api/auth/refresh:
+ *   post:
+ *     summary: Обновить токены
+ *     description: Получить refresh-токен и генерация новой пары access и refresh токенов
+ *     tags: [Auth]
+ *     requestBody:
+ *      required: true
+ *      content:
+ *        application/json:
+ *          schema:
+ *            type: object
+ *            required:
+ *              - refreshToken
+ *            properties:
+ *              refreshToken:
+ *                type: string
+ *                description: Refresh токен
+ *                example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+ *     responses:
+ *       200:
+ *         description: Токены успешно обновлены
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                accessToken:
+ *                  type: string
+ *                  example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+  *                refreshToken:
+  *                 type: string
+  *                 example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+ *       400:
+ *         description: Refresh токен не предоставлен
+ *       401:
+ *         description: Недействительный refresh токен
+ *       403:
+ *         description: Токен истек или недействителен
+ *       404:
+ *         description: Пользователь не найден
+ */
+
+app.post('/api/auth/refresh', (req,res) =>{
+  const {refreshToken} = req.body;
+  if (!refreshToken){
+    return res.status(400).json({error: "Refresh токен не предоставлен"});
+  }
+  const storedToken = refreshTokens.find(rt => rt.token === refreshToken);
+  if (!storedToken){
+    return res.status(401).json({error: "Недействительный refresh токен"});
+  }
+
+  jwt.verify(refreshToken, REFRESH_SECRET, (err, decoded) => {
+    
+    if (err) {
+      refreshTokens = refreshTokens.filter(rt => rt.token !== refreshToken);
+      return res.status(403).json({ error: "Недействительный refresh токен" });
+    }
+
+    const user = users.find(u => u.id === decoded.id);
+    if (!user) {
+      refreshTokens = refreshTokens.filter(rt => rt.token !== refreshToken);
+      return res.status(404).json({ error: "Пользователь не найден" });
+    }
+
+    refreshTokens = refreshTokens.filter(rt => rt.token !== refreshToken);
+    const tokens = generateTokens(user);
+    res.status(200).json(tokens);
+  });
 });
 
 /**
