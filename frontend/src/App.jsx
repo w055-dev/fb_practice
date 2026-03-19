@@ -3,6 +3,7 @@ import axios from 'axios';
 import ProductCard from './components/ProductCard';
 import ProductForm from './components/ProductForm';
 import Auth from './components/Auth';
+import UserManagement from './components/UserManagement';
 import './styles/output.css';
 
 axios.interceptors.request.use(config => {
@@ -50,6 +51,8 @@ function App() {
     const [error, setError] = useState(null);
     const [showForm, setShowForm] = useState(false);
     const [editingProduct, setEditingProduct] = useState(null);
+    const [showUserManagement, setShowUserManagement] = useState(false);
+
     useEffect(() => {
         const savedUser = localStorage.getItem('user');
         if (savedUser) {
@@ -71,8 +74,10 @@ function App() {
     };
 
     useEffect(() => {
-        fetchProducts();
-    }, []);
+        if (user) {
+            fetchProducts();
+        }
+    }, [user]);
 
     const handleLoginSuccess = (userData) => {
         setUser(userData);
@@ -83,6 +88,7 @@ function App() {
         setUser(null);
         setShowForm(false);
         setEditingProduct(null);
+        setShowUserManagement(false);
     };
 
     const handleCreate = () => {
@@ -109,7 +115,7 @@ function App() {
     const handleFormSubmit = async (formData) => {
         try {
             if (editingProduct) {
-                await axios.patch(`/api/products/${editingProduct.id}`, formData);
+                await axios.put(`/api/products/${editingProduct.id}`, formData);
             } else {
                 await axios.post('/api/products', formData);
             }
@@ -125,6 +131,9 @@ function App() {
         setShowForm(false);
         setEditingProduct(null);
     };
+    
+    const canCreateProduct = user?.role === 'seller' || user?.role === 'admin';
+    const canManageUsers = user?.role === 'admin';
 
     if (!user) {
         return <Auth onLoginSuccess={handleLoginSuccess} />;
@@ -135,19 +144,32 @@ function App() {
 
     return (
         <main className="main">
+            <h1>Детективный магазин</h1>
             <div className="header">
                 <div>
-                    <h1>Детективный магазин</h1>
                     <div className="user-info">
                         <span>Привет, {user.name}!</span>
+                        <span className="user-role">
+                            ({user.role === 'admin' ? 'Администратор' : user.role === 'seller' ? 'Продавец' : 'Пользователь'})
+                        </span>
+                        {canManageUsers && (
+                            <button 
+                                className="btn btn-primary"
+                                onClick={() => setShowUserManagement(true)}
+                            >
+                                Управление пользователями
+                            </button>
+                        )}
                         <button className="btn-logout" onClick={handleLogout}>
                             Выйти
                         </button>
                     </div>
                 </div>
-                <button className="btn-create" onClick={handleCreate}>
-                    + Создать товар
-                </button>
+                {canCreateProduct && (
+                    <button className="btn-create" onClick={handleCreate}>
+                        + Создать товар
+                    </button>
+                )}
             </div>
 
             {showForm && (
@@ -158,11 +180,16 @@ function App() {
                 />
             )}
 
+            {showUserManagement && (
+                <UserManagement onClose={() => setShowUserManagement(false)} />
+            )}
+
             <div className="goods">
                 {products.map(product => (
                     <ProductCard 
                         key={product.id} 
                         product={product}
+                        userRole={user.role}
                         onEdit={() => handleEdit(product)}
                         onDelete={() => handleDelete(product.id)}
                     />

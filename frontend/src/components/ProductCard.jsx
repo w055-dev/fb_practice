@@ -1,6 +1,6 @@
 import React from 'react';
 
-const ProductCard = ({ product, onEdit, onDelete }) => {
+const ProductCard = ({ product, onEdit, onDelete, userRole }) => {
     const getStockStatus = (stock) => {
         if (stock <= 0) return { 
             text: 'Нет в наличии', 
@@ -17,6 +17,8 @@ const ProductCard = ({ product, onEdit, onDelete }) => {
     };
 
     const stockStatus = getStockStatus(product.stock);
+    const canEdit = userRole === 'seller' || userRole === 'admin';
+    const canDelete = userRole === 'admin';
 
     return (
         <article className="card">
@@ -38,10 +40,28 @@ const ProductCard = ({ product, onEdit, onDelete }) => {
                         {stockStatus.text}
                     </span>
                 </div>
-                <div className='card__actions'>
-                    <button className='btn btn-edit' onClick={onEdit} title='Редактировать'>Изменить</button>
-                    <button className='btn btn-delete' onClick={onDelete} title='Удалить'>Удалить</button>
-                </div>
+                {(canEdit || canDelete) && (
+                    <div className='card__actions'>
+                        {canEdit && (
+                            <button 
+                                className='btn btn-edit' 
+                                onClick={onEdit} 
+                                title='Редактировать'
+                            >
+                                Изменить
+                            </button>
+                        )}
+                        {canDelete && (
+                            <button 
+                                className='btn btn-delete' 
+                                onClick={onDelete} 
+                                title='Удалить'
+                            >
+                                Удалить
+                            </button>
+                        )}
+                    </div>
+                )}
             </div>
         </article>
     );
