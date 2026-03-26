@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel = "manifest" href="manifest.json">
+    <meta name = "mobile-web-app-capable" content="yes">
+    <meta name = "theme-color" content="#4285f4">
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon-120x120.png">
+    <meta name="apple-mobile-web-app-status-bar-style" content="blacktranslucent">
+    <title>Заметки(13-18)</title>
+    <link rel = "stylesheet" href = "https://unpkg.com/chota@latest">
+    <link rel = "icon" href = "icons/favicon.ico" sizes="16x16" type="image/ico">
+</head>
+<body>
+    <div class="container">
+        <h1>Базовое веб-приложение для управлением списком дел</h1>
+        <form id = "note-form" class="row">
+            <input class = "col-9" type="text" id="note-input" placeholder="Введите заметку" required>
+            <button class="col-3" type="submit">Добавить</button>
+        </form>
+        <ul id="notes-list"></ul>
+        <script src = "app.js"></script>
+    </div>
+</body>
+</html>
