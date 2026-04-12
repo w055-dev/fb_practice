@@ -98,8 +98,10 @@ function initNotes() {
     const form = document.getElementById('note-form');
     const input = document.getElementById('note-input');
     const list = document.getElementById('notes-list');
+    const reminderForm = document.getElementById('reminder-form');
+    const reminderText = document.getElementById('reminder-text');
+    const reminderTime = document.getElementById('reminder-time');
 
-    // Заменил функцию deleteNote на глобальную
     window.deleteNote = function(id) {
         const notes = JSON.parse(localStorage.getItem('notes') || '[]');
         notes.splice(id, 1);
@@ -109,21 +111,46 @@ function initNotes() {
 
     function loadNotes() {
         const notes = JSON.parse(localStorage.getItem('notes') || '[]');
-        list.innerHTML = notes.map((note, i) => `
-            <li class="row" style="margin-bottom: 10px; align-items: center;">
-                <span class="col-9">${note.text}</span> <!-- без escapeHtml -->
-                <button class="col-3 button error" onclick="deleteNote(${i})">Удалить</button>
-            </li>
-        `).join('');
+        if (notes.length == 0){
+            list.innerHTML = `<li class = "no-notes">Заметок пока нет. Создай новую (-_-)</li>`
+            return;
+        }
+        
+        list.innerHTML = notes.map((note, i) =>{
+            let reminderInfo = '';
+            if (note.reminder){
+                const date = new Date(note.reminder);
+                reminderInfo = `<br><small>Напоминание: ${date.toLocaleString()}</small>`;
+            }
+            return `
+                <li class="card note-item">
+                    <div class="note-content">
+                        <div class = "note-text">${note.text}</div>
+                        ${reminderInfo}
+                    </div>
+                    <div class = "note-actions">
+                        <button class = "button error" onclick="deleteNote(${i})">Удалить</button>
+                    </div>
+                </li>
+            `;
+        }).join('');
     }
 
-    function addNote(text, datetime) {
+    function addNote(text, reminderTimestamp = null) {
         const notes = JSON.parse(localStorage.getItem('notes') || '[]');
-        const newNote = {id : Date.now(), text, datetime: datetime || ''};
+        const newNote = {id : Date.now(), text, reminder: reminderTimestamp || ''};
         notes.push(newNote);
         localStorage.setItem('notes', JSON.stringify(notes));
         loadNotes();
-        socket.emit('newTask', {text, timestamp: Date.now()});
+        if (reminderTimestamp){
+            socket.emit('newReminder', {
+                id: newNote.id,
+                text: text,
+                reminderTime: reminderTimestamp
+            });
+        } else{
+            socket.emit('newTask', {text, timestamp: Date.now() });
+        }
     }
 
     form.addEventListener('submit', (e) => {
@@ -132,6 +159,22 @@ function initNotes() {
         if (text) {
             addNote(text);
             input.value = '';
+        }
+    });
+
+    reminderForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const text = reminderText.value.trim();
+        const datetime = reminderTime.value;
+        if (text && datetime){
+           const timestamp = new Date(datetime).getTime();
+           if (timestamp > Date.now()){
+                addNote(text, timestamp);
+                reminderText.value = '';
+                reminderTime.value = '';
+           } else {
+                alert('Дата напоминания должна быть в будущем');
+           }
         }
     });
 
@@ -148,33 +191,33 @@ if ('serviceWorker' in navigator) {
             const disableBtn = document.getElementById('disable-push');
 
             if (enableBtn && disableBtn) {
-            const subscription = await reg.pushManager.getSubscription();
-            if (subscription) {
+                const subscription = await reg.pushManager.getSubscription();
+                if (subscription) {
+                    enableBtn.style.display = 'none';
+                    disableBtn.style.display = 'inline-block';
+                }
+                enableBtn.addEventListener('click', async () => {
+                    if (Notification.permission === 'denied') {
+                        alert('Уведомления запрещены. Разрешите их в настройках браузера.');
+                        return;
+                }
+                if (Notification.permission === 'default') {
+                    const permission = await Notification.requestPermission();
+                    if (permission !== 'granted') {
+                        alert('Необходимо разрешить уведомления.');
+                        return;
+                    }
+                }
+                await subscribeToPush();
                 enableBtn.style.display = 'none';
                 disableBtn.style.display = 'inline-block';
-            }
-            enableBtn.addEventListener('click', async () => {
-                if (Notification.permission === 'denied') {
-                    alert('Уведомления запрещены. Разрешите их в настройках браузера.');
-                    return;
-            }
-            if (Notification.permission === 'default') {
-                const permission = await Notification.requestPermission();
-                if (permission !== 'granted') {
-                    alert('Необходимо разрешить уведомления.');
-                    return;
-                }
-            }
-            await subscribeToPush();
-            enableBtn.style.display = 'none';
-            disableBtn.style.display = 'inline-block';
-            });
+                });
 
-            disableBtn.addEventListener('click', async () => {
-                await unsubscribeFromPush();
-                disableBtn.style.display = 'none';
-                enableBtn.style.display = 'inline-block';
-            });
+                disableBtn.addEventListener('click', async () => {
+                    await unsubscribeFromPush();
+                    disableBtn.style.display = 'none';
+                    enableBtn.style.display = 'inline-block';
+                });
         }
         } catch (err) {
             console.log('SW registration failed:', err);
