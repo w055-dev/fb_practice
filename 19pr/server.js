@@ -74,6 +74,7 @@ app.delete('/api/users/:id', async (req,res) =>{
 
 sequelize.authenticate() //Синхронизация с бд и своеобразный обход асинхронности
     .then(() => console.log('Успешно подключен к бд'))
+    .then(sequelize.sync())
     .then(() => {
         app.listen(3000, () =>{
             console.log('server is running on http://localhost:3000');
