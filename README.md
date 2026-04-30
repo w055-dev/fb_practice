@@ -1,3 +1,268 @@
+# Отчет по практическим работам №19-23
+## Работа с СУБД и контейнеризацией
+### Практическая работа №19 - PostgreSQL
+
+**Цель:** Создать API на Node.js + Express для управления списком пользователей и хранением данных в базе PostgreSQL.
+
+**Сущность User:**
+
+| Поле        | Тип        | Описание                                |
+|-------------|------------|-----------------------------------------|
+| id          | Integer    | Уникальный идентификатор                |
+| first_name  | Varchar    | Имя пользователя                        |
+| last_name   | Varchar    | Фамилия пользователя                    |
+| age         | Integer    | Возраст                                 |
+| created_at  | Timestamp  | Время создания пользователя (unix)      |
+| updated_at  | Timestamp  | Время обновления пользователя (unix)    |
+
+**Эндпоинты:**
+
+| Метод  | Маршрут           | Описание                    |
+|--------|-------------------|-----------------------------|
+| POST   | /api/users        | Создание пользователя       |
+| GET    | /api/users        | Получение списка            |
+| GET    | /api/users/:id    | Получение пользователя по ID|
+| PATCH  | /api/users/:id    | Обновление пользователя     |
+| DELETE | /api/users/:id    | Удаление пользователя       |
+
+**Результат:** Реализовано базовое REST API, операции которого связаны с реляционной базой данных PostgreSQL.
+
+---
+
+### Практическая работа №20 - MongoDB
+
+**Цель:** Создать API на Node.js + Express для управления списком пользователей и храненмем данных в базе MongoDB.
+
+**Сущность User:**
+
+| Поле        | Тип        | Описание                                |
+|-------------|------------|-----------------------------------------|
+| id          | Integer    | Уникальный идентификатор                |
+| first_name  | Varchar    | Имя пользователя                        |
+| last_name   | Varchar    | Фамилия пользователя                    |
+| age         | Integer    | Возраст                                 |
+| created_at  | Timestamp  | Время создания пользователя (unix)      |
+| updated_at  | Timestamp  | Время обновления пользователя (unix)    |
+
+**Эндпоинты:**
+
+| Метод  | Маршрут           | Описание                    |
+|--------|-------------------|-----------------------------|
+| POST   | /api/users        | Создание пользователя       |
+| GET    | /api/users        | Получение списка            |
+| GET    | /api/users/:id    | Получение пользователя по ID|
+| PATCH  | /api/users/:id    | Обновление пользователя     |
+| DELETE | /api/users/:id    | Удаление пользователя       |
+
+**Результат:** Реализовано базовое REST API, операции которого связзаны с документоориентированной базой данных MongoDB.
+
+---
+
+### Практическая работа №21 - Redis
+
+**Цель:** Доработать программу из практического задания №11: добавить кэширование для нескольких маршрутов через Redis.
+
+**Эндпоинты:**
+
+|  Маршрут          | Метод | Время кэша | Описание маршрута              |
+|-------------------|-------|------------|--------------------------------|
+| /api/users        | GET   | 1 минута   | Получить список пользователей  |
+| /api/users/:id    | GET   | 1 минута   | Получить пользователя по id    |
+| /api/products     | GET   | 10 минут   | Получить список товаров        |
+| /api/products/:id | GET   | 10 минут   | Получить товар по id           |
+
+**Реализовано:**
+- `cacheMiddleware(keyBuilder, ttl)` — проверяет кэш перед выполнением запроса
+- `saveToCache(key, data, ttl)` — сохраняет ответ в Redis
+- `invalidateUsersCache(id)` / `invalidateProductsCache(id)` — сброс кэша при мутациях
+
+**Результат:** Доработано приложение из практической работы №11 - добавлено кэширование GET-маршрутов через СУБД Redis: ответ содержит `"source": "cache"` при попадании в кэш, `"source": "server"` при промахе.
+
+---
+
+### Практическая работа №22 - Балансировка нагрузки
+
+**Цель** Реализовать тестовую систему балансировки нагрузки для веб-приложения.
+
+**Nginx — балансировка и отказоустойчивость:**
+```events {
+    worker_connections 1024;
+}
+
+http {
+    upstream backend {
+        server backend1:3000 max_fails=2 fail_timeout=30s;
+        server backend2:3001 max_fails=2 fail_timeout=30s;
+        server backend3:3002 max_fails=2 fail_timeout=30s;
+    }
+
+    server {
+        listen 80;
+        
+        location / {
+            proxy_pass http://backend;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+        }
+    }
+}
+```
+**HAProxy — альтернативная балансировка::**
+```
+frontend http_front
+    bind *:8080
+    default_backend http_back
+backend http_back
+    balance roundrobin
+    server backend1 backend1:3000 check
+    server backend2 backend2:3001 check
+```
+
+**server.js**:
+```
+const express = require('express');
+const app = express();
+const PORT = process.env.PORT || 3000;
+
+app.get("/", (req,res) => {
+    res.json({
+        message: "Common response from backend",
+        port: PORT
+    });
+});
+
+app.listen(PORT, () =>{
+    console.log(`Server running on ${PORT}`);
+});
+```
+**Выполнено:**
+- Настроен Nginx как балансировщик загрузки с отказоустойчивостью(`max_fails=2`, `fail_timeout=30s`)
+- Настроен HAProxy как альтернативный балансировщик с алгоритмом roundrobin 
+
+
+**Результат:** Реализована система балансировки нагрузки. Nginx распределяет запросы между тремя backend-серверами (3000, 3001, 3002), HAProxy — между двумя (3000, 3001). Оба балансировщика работают параллельно на портах 8080 и 8081.
+
+---
+
+### Практическая работа №23 - Docker
+
+**Цель:** Реализовать веб-приложение с несколькими backend-серверами и балансировкой через Nginx, развернув всё с Docker Compose.
+
+**server.js:**
+```
+const express = require('express');
+const app = express();
+const PORT = process.env.PORT || 3000;
+const SERVER_ID = process.env.SERVER_ID || '1';
+
+app.get("/", (req,res) => {
+    res.json({
+        message: "Common response from backend",
+        port: PORT,
+        server: SERVER_ID
+    });
+});
+
+app.listen(PORT, () =>{
+    console.log(`Server running on ${PORT}`);
+});
+```
+
+**Dockerfile:**
+```
+FROM node:18-alpine
+WORKDIR /app
+COPY package*.json ./
+RUN npm install
+COPY server.js ./
+EXPOSE 3000
+CMD [ "npm", "start" ]
+```
+
+**nginx.conf**:
+```
+events {
+    worker_connections 1024;
+}
+
+http {
+    upstream backend {
+        server backend1:3000 max_fails=2 fail_timeout=30s;
+        server backend2:3000 max_fails=2 fail_timeout=30s;
+        server backend3:3000 max_fails=2 fail_timeout=30s;
+    }
+
+    server {
+        listen 80;
+        
+        location / {
+            proxy_pass http://backend;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+        }
+    }
+}
+```
+
+**docker-compose.yml**
+```
+services:
+  backend1:
+    build: ./backend
+    environment:
+      - PORT=3000
+      - SERVER_ID=1
+    networks:
+      - app-network
+    restart: unless-stopped
+
+  backend2:
+    build: ./backend
+    environment:
+      - PORT=3000
+      - SERVER_ID=2
+    networks:
+      - app-network
+    restart: unless-stopped
+
+  backend3:
+    build: ./backend
+    environment:
+      - PORT=3000
+      - SERVER_ID=3
+    networks:
+      - app-network
+    restart: unless-stopped
+
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf
+    networks:
+      - app-network
+    depends_on:
+      - backend1
+      - backend2
+      - backend3
+    restart: unless-stopped
+
+networks:
+  app-network:
+    driver: bridge
+```
+
+**Выполнено:**
+- Три идентичных backend-сервиса на Express, каждый возвращает свой `SERVER_ID`
+- Nginx в роли балансировщика нагрузки с отказоустойчивостью
+- Все сервисы объединены в единую сеть `app-network`
+- Запуск всего стека одной командой `docker compose up --build`
+
+**Результат:**Приложение развёрнуто в Docker-контейнерах. Nginx балансирует запросы между тремя backend-серверами. При отказе одного сервера после двух неудачных попыток он исключается на 30 секунд, трафик продолжает обслуживаться оставшимися.
+
+---
+
 # Отчет по практическим работам №13–17
 ## Разработка офлайн-приложения для заметок (PWA)
 

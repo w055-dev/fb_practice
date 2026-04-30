@@ -5,6 +5,7 @@ const swaggerUi = require('swagger-ui-express');
 const { nanoid } = require('nanoid');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
+const { createClient } = require('redis');
 
 const app = express();
 const port = 3000;
@@ -64,6 +65,21 @@ const JWT_SECRET = "access_secret";
 const REFRESH_SECRET = "refresh_secret";
 const ACCESS_EXPIRES_IN = "15m";
 const REFRESH_EXPIRES_IN = "7d";
+const USERS_CACHE_TTL = 60;
+const PRODUCTS_CACHE_TTL = 600;
+
+const redisClient = createClient({
+    url: "redis://127.0.0.1:6379"
+});
+
+redisClient.on("error", (err) =>{
+    console.error("Redis error:", err);
+});
+
+async function initRedis(){
+    await redisClient.connect();
+    console.log("Redis successfully connected");
+};
 
 async function hashPassword(password) {
     const rounds = 10;
@@ -143,6 +159,64 @@ function authorize(...allowedRoles) {
         
         next();
     };
+}
+
+function cacheMiddleware(keybuilder, ttl){
+    return async (req, res, next) => {
+        if (!redisClient.isReady){
+            return next();
+        }
+        try{
+            const key = keybuilder(req);
+            const cachedData = await redisClient.get(key);
+            if (cachedData){
+                return res.json({
+                    source: "cache",
+                    data: JSON.parse(cachedData)
+                });
+            }
+            req.cacheKey = key;
+            req.cacheTTL = ttl;
+            next();
+        } catch (err){
+            console.error("Cache read error", err);
+        }
+    };
+}
+
+async function saveToCache(key,data,ttl){
+    if (!redisClient.isReady) return;
+    try{
+        await redisClient.set(key, JSON.stringify(data),{
+            EX: ttl
+        });
+    } catch(err){
+        console.error("Cache save error", err);
+    }
+}
+
+async function invalidateUsersCache(userId = null){
+    if (!redisClient.isReady) return;
+    try{
+        await redisClient.del("users:all");
+        if (userId) {
+            await redisClient.del(`users:${userId}`);
+        }
+    } catch(err){
+        console.error("Users cache invalidate error:", err);
+    }
+}
+
+async function invalidateProductsCache(productId = null){
+    if (!redisClient.isReady) return;
+    try{
+        await redisClient.del("products:all");
+        if (productId){
+            await redisClient.del(`products:${productId}`);
+        }
+    } catch(err){
+        console.error("Products cache invalidate error", err);
+    }
 }
 
 const swaggerOptions = {
@@ -481,12 +555,13 @@ app.get('/api/auth/me', authenticateToken, (req, res) => {
  *       403:
  *         description: Недостаточно прав
  */
-app.get('/api/users', authenticateToken, authorize(ROLES.ADMIN), (req, res) => {
+app.get('/api/users', authenticateToken, authorize(ROLES.ADMIN), cacheMiddleware(() => "users:all", USERS_CACHE_TTL) , async(req, res) => {
     const usersResponse = users.map(user => {
         const { password, ...userWithoutPassword } = user;
         return userWithoutPassword;
     });
-    res.json(usersResponse);
+    await saveToCache(req.cacheKey, usersResponse, req.cacheTTL);
+    res.json({source: "server", data:usersResponse});
 });
 
 /**
@@ -517,14 +592,15 @@ app.get('/api/users', authenticateToken, authorize(ROLES.ADMIN), (req, res) => {
  *       404:
  *         description: Пользователь не найден
  */
-app.get('/api/users/:id', authenticateToken, authorize(ROLES.ADMIN), (req, res) => {
+app.get('/api/users/:id', authenticateToken, authorize(ROLES.ADMIN), cacheMiddleware((req) => `users:${req.params.id}`, USERS_CACHE_TTL), async(req, res) => {
     const user = users.find(u => u.id === req.params.id);
     if (!user) {
         return res.status(404).json({ error: 'Пользователь не найден' });
     }
     
     const { password, ...userWithoutPassword } = user;
-    res.json(userWithoutPassword);
+    await saveToCache(req.cacheKey, userWithoutPassword, req.cacheTTL);
+    res.json({source: "server", data: userWithoutPassword});
 });
 
 /**
@@ -571,7 +647,7 @@ app.get('/api/users/:id', authenticateToken, authorize(ROLES.ADMIN), (req, res) 
  *       404:
  *         description: Пользователь не найден
  */
-app.put('/api/users/:id', authenticateToken, authorize(ROLES.ADMIN), (req, res) => {
+app.put('/api/users/:id', authenticateToken, authorize(ROLES.ADMIN), async(req, res) => {
     const userIndex = users.findIndex(u => u.id === req.params.id);
     if (userIndex === -1) {
         return res.status(404).json({ error: 'Пользователь не найден' });
@@ -581,8 +657,9 @@ app.put('/api/users/:id', authenticateToken, authorize(ROLES.ADMIN), (req, res) 
         ...users[userIndex],
         ...updateData
     };
+    await invalidateUsersCache(req.params.id);
     const { password: _, ...userWithoutPassword } = users[userIndex];
-    res.json(userWithoutPassword);
+    res.json({source: "server", data: userWithoutPassword});
 });
 
 /**
@@ -616,15 +693,16 @@ app.put('/api/users/:id', authenticateToken, authorize(ROLES.ADMIN), (req, res) 
  *       404:
  *         description: Пользователь не найден
  */
-app.delete('/api/users/:id', authenticateToken, authorize(ROLES.ADMIN), (req, res) => {
+app.delete('/api/users/:id', authenticateToken, authorize(ROLES.ADMIN), async(req, res) => {
     const userIndex = users.findIndex(u => u.id === req.params.id);
     if (userIndex === -1) {
         return res.status(404).json({ error: 'Пользователь не найден' });
     }
     users[userIndex].isBlocked = true;
-    // Удаление всех refresh токенов пользователя
+    const userId = users[userIndex].id;
+    await invalidateUsersCache(userId);
     refreshTokens = refreshTokens.filter(rt => rt.userId !== req.params.id);
-    res.json({ message: 'Пользователь заблокирован' });
+    res.json({ message: 'Пользователь заблокирован', id: userId });
 });
 
 /**
@@ -647,8 +725,9 @@ app.delete('/api/users/:id', authenticateToken, authorize(ROLES.ADMIN), (req, re
  *       401:
  *         description: Токен не предоставлен
  */
-app.get('/api/products', authenticateToken, authorize(ROLES.USER, ROLES.SELLER, ROLES.ADMIN), (req, res) => {
-    res.json(products);
+app.get('/api/products', authenticateToken, authorize(ROLES.USER, ROLES.SELLER, ROLES.ADMIN), cacheMiddleware(() => "products:all", PRODUCTS_CACHE_TTL), async (req, res) => {
+    await saveToCache(req.cacheKey, products, req.cacheTTL);
+    res.json({source: "server", data: products});
 });
 
 /**
@@ -677,12 +756,13 @@ app.get('/api/products', authenticateToken, authorize(ROLES.USER, ROLES.SELLER, 
  *       404:
  *         description: Товар не найден
  */
-app.get('/api/products/:id', authenticateToken, authorize(ROLES.USER, ROLES.SELLER, ROLES.ADMIN), (req, res) => {
+app.get('/api/products/:id', authenticateToken, authorize(ROLES.USER, ROLES.SELLER, ROLES.ADMIN), cacheMiddleware((req) => `products:${req.params.id}`, PRODUCTS_CACHE_TTL), async (req, res) => {
     const product = products.find(p => p.id == req.params.id);
     if (!product) {
         return res.status(404).json({ error: 'Товар не найден' });
     }
-    res.json(product);
+    await saveToCache(req.cacheKey, product, req.cacheTTL);
+    res.json({source: "server" ,data:product});
 });
 
 /**
@@ -726,7 +806,7 @@ app.get('/api/products/:id', authenticateToken, authorize(ROLES.USER, ROLES.SELL
  *       403:
  *         description: Недостаточно прав
  */
-app.post('/api/products', authenticateToken, authorize(ROLES.SELLER, ROLES.ADMIN), (req, res) => {
+app.post('/api/products', authenticateToken, authorize(ROLES.SELLER, ROLES.ADMIN),  async (req, res) => {
     const { name, category, description, price, stock, image } = req.body;
     if (!name || !category || !description || !price || !stock) {
         return res.status(400).json({ error: 'Заполните все поля' });
@@ -742,7 +822,8 @@ app.post('/api/products', authenticateToken, authorize(ROLES.SELLER, ROLES.ADMIN
         image: image || '/images/default.jpg'
     };
     products.push(newProduct);
-    res.status(201).json(newProduct);
+    await invalidateProductsCache();
+    res.status(201).json({source: "server", data: newProduct});
 });
 
 /**
@@ -786,7 +867,7 @@ app.post('/api/products', authenticateToken, authorize(ROLES.SELLER, ROLES.ADMIN
  *       404:
  *         description: Товар не найден
  */
-app.put('/api/products/:id', authenticateToken, authorize(ROLES.SELLER, ROLES.ADMIN), (req, res) => {
+app.put('/api/products/:id', authenticateToken, authorize(ROLES.SELLER, ROLES.ADMIN), async (req, res) => {
     const productIndex = products.findIndex(p => p.id == req.params.id);
     if (productIndex === -1) {
         return res.status(404).json({ error: 'Товар не найден' });
@@ -796,7 +877,8 @@ app.put('/api/products/:id', authenticateToken, authorize(ROLES.SELLER, ROLES.AD
         ...req.body,
         id: products[productIndex].id
     };
-    res.json(products[productIndex]);
+    await invalidateProductsCache(req.params.id);
+    res.json({source: "server", data:products[productIndex]});
 });
 
 /**
@@ -829,17 +911,19 @@ app.put('/api/products/:id', authenticateToken, authorize(ROLES.SELLER, ROLES.AD
  *       404:
  *         description: Товар не найден
  */
-app.delete('/api/products/:id', authenticateToken, authorize(ROLES.ADMIN), (req, res) => {
+app.delete('/api/products/:id', authenticateToken, authorize(ROLES.ADMIN), async (req, res) => {
     const initialLength = products.length;
     products = products.filter(p => p.id != req.params.id);
     if (products.length < initialLength) {
+        await invalidateProductsCache(req.params.id);
         res.json({ message: 'Товар удален' });
     } else {
         res.status(404).json({ error: 'Товар не найден' });
     }
 });
-
-app.listen(port, () => {
+initRedis().then(() =>{
+    app.listen(port, () => {
     console.log(`Сервер запущен на http://localhost:${port}`);
     console.log(`Swagger: http://localhost:${port}/api-docs`);
+});
 });
