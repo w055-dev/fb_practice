@@ -1,0 +1,158 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  background: #0f0f1a;
+  color: #e1e1e6;
+}
+
+.app {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Header */
+.app-header {
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+  padding: 2.5rem 2rem;
+  text-align: center;
+}
+
+.app-header h1 {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #e94560;
+}
+
+/* Navigation */
+.app-nav {
+  display: flex;
+  gap: 0.5rem;
+  padding: 1rem 2rem;
+  background: #16213e;
+  border-bottom: 1px solid #1f2b47;
+  justify-content: center;
+}
+
+.app-nav a {
+  color: #a8b2d1;
+  text-decoration: none;
+  padding: 0.7rem 1.5rem;
+  border-radius: 8px;
+  font-weight: 500;
+  font-size: 0.95rem;
+  transition: all 0.3s ease;
+  position: relative;
+}
+
+.app-nav a:hover {
+  background: rgba(233, 69, 96, 0.1);
+  color: #e94560;
+  transform: translateY(-1px);
+}
+
+.app-nav a:active {
+  transform: translateY(0);
+}
+
+.app-main {
+  flex: 1;
+  padding: 2rem;
+  max-width: 900px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.page {
+  background: #16213e;
+  padding: 2.5rem;
+  border-radius: 16px;
+  border: 1px solid #1f2b47;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+.page h1 {
+  color: #e94560;
+  margin-bottom: 1.5rem;
+  font-size: 1.8rem;
+}
+
+.page p {
+  margin-bottom: 1rem;
+  line-height: 1.7;
+  color: #a8b2d1;
+}
+
+.heavy-component {
+  margin-top: 2rem;
+  padding: 1.8rem;
+  background: #1a1a2e;
+  border-radius: 12px;
+  border: 1px solid #1f2b47;
+}
+
+.heavy-component h2 {
+  color: #ff6b6b;
+  margin-bottom: 1rem;
+  font-size: 1.3rem;
+}
+
+.heavy-component p {
+  color: #a8b2d1;
+  margin-bottom: 0.8rem;
+}
+
+.data-preview {
+  margin-top: 1.5rem;
+  padding: 1.2rem;
+  background: #0f0f1a;
+  border-radius: 8px;
+  border: 1px solid #1f2b47;
+}
+
+.data-preview h3 {
+  color: #e1e1e6;
+  margin-bottom: 1rem;
+  font-size: 1rem;
+}
+
+.data-preview ul {
+  list-style: none;
+}
+
+.data-preview li {
+  padding: 0.7rem;
+  border-bottom: 1px solid #1f2b47;
+  color: #a8b2d1;
+  font-size: 0.9rem;
+}
+
+.data-preview li:last-child {
+  border-bottom: none;
+}
+
+.data-preview li strong {
+  color: #e94560;
+}
+
+.data-preview p {
+  margin-top: 0.8rem;
+  color: #5a6a8c;
+  font-style: italic;
+}
+
+
+.app-footer {
+  background: #0a0a15;
+  color: #5a6a8c;
+  text-align: center;
+  padding: 1.2rem;
+  margin-top: auto;
+  border-top: 1px solid #1f2b47;
+  font-size: 0.9rem;
+}
