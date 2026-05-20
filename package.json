@@ -1,8 +1,10 @@
 {
   "dependencies": {
+    "@apollo/server": "^5.5.1",
     "body-parser": "^2.2.2",
     "cors": "^2.8.6",
     "express": "^5.2.1",
+    "graphql": "^16.14.0",
     "mongoose": "^9.4.1",
     "pg": "^8.20.0",
     "redis": "^5.12.1",
